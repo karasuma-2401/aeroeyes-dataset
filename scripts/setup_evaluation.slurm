@@ -13,6 +13,8 @@
 
 set -euo pipefail
 
+trap 'status=$?; echo "Evaluation setup failed (exit=$status): $BASH_COMMAND" >&2; exit "$status"' ERR
+
 PROJECT_DIR="${SLURM_SUBMIT_DIR:-$PWD}"
 PYTHON="$PROJECT_DIR/venv/bin/python"
 
@@ -33,26 +35,29 @@ module load slurm/slurm/25.05
 module load shared python312
 
 export PIP_CACHE_DIR=/datastore/khanhnd/models/aeroeyes_model/pip
+export TMPDIR=/datastore/khanhnd/models/aeroeyes_model/tmp
 export AEROEYES_MODEL_DIR=/datastore/khanhnd/models/aeroeyes_model
 export SDQM_REPO_DIR="$PROJECT_DIR/third_party/SDQM"
 export PYTHON
 
-mkdir -p "$PIP_CACHE_DIR"
+mkdir -p "$PIP_CACHE_DIR" "$TMPDIR"
 
-"$PYTHON" -m pip install ultralytics==8.4.118
+"$PYTHON" -m pip install --progress-bar off ultralytics==8.4.118
 bash scripts/setup_sdqm_vinfo.sh
-"$PYTHON" -m pip install \
+"$PYTHON" -m pip install --progress-bar off \
   pyiqa==0.1.16 \
   -r cmmd-pytorch/requirements.txt
 "$PYTHON" -m pip check
 
 "$PYTHON" - <<'PY'
 import absl
+import autokeras
 from importlib.metadata import version
 import pandas
 import pyiqa
 import scipy
 import skimage
+import tensorflow
 import torch
 
 from src.evaluation.sdqm_vinfo import check_custom_ultralytics
@@ -70,5 +75,7 @@ print(f"pandas: {pandas.__version__}")
 print(f"scipy: {scipy.__version__}")
 print(f"scikit-image: {skimage.__version__}")
 print(f"pyiqa: {version('pyiqa')}")
+print(f"tensorflow: {tensorflow.__version__}")
+print(f"autokeras: {version('autokeras')}")
 print("Evaluation environment is ready.")
 PY

@@ -43,6 +43,26 @@ class GenerationEnvironmentTests(unittest.TestCase):
         self.assertIn("pyiqa==0.1.16", script)
         self.assertIn("pip check", script)
         self.assertIn("check_custom_ultralytics", script)
+        self.assertIn("import tensorflow", script)
+        self.assertIn("import autokeras", script)
+        self.assertIn("export TMPDIR=", script)
+        self.assertIn("Evaluation setup failed", script)
+
+    def test_sdqm_setup_omits_unused_fiftyone_dependency(self) -> None:
+        requirements = Path("requirements-sdqm.txt").read_text(encoding="utf-8")
+        core_requirements = Path("requirements-sdqm-core.txt").read_text(
+            encoding="utf-8"
+        )
+        script = Path("scripts/setup_sdqm_vinfo.sh").read_text(encoding="utf-8")
+
+        self.assertNotIn("fiftyone", (requirements + core_requirements).lower())
+        self.assertIn("-r requirements-sdqm-core.txt", requirements)
+        self.assertIn("tensorflow", requirements)
+        self.assertIn("autokeras", requirements)
+        self.assertIn("requirements-sdqm-core.txt", script)
+        self.assertIn("tensorflow==2.21.0", script)
+        self.assertIn("--progress-bar off", script)
+        self.assertIn("SDQM setup failed", script)
 
 
 class GenerationJobTests(unittest.TestCase):
