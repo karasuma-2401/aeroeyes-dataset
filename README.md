@@ -92,6 +92,40 @@ tail -f "$(ls -t logs/generate_*.out | head -n 1)"
 Generated pairs and resumable metadata are written below
 `/datastore/khanhnd/models/aeroeyes_output/output/`.
 
+After visually checking the generated pairs, run the dedicated bounding-box
+trial. It loads Grounding DINO once, detects rescue objects in each before/after
+pair, matches preserved detections by class and IoU, and confirms a newly added
+object only when its detection overlaps the image-change mask. The same job runs
+the focused bounding-box and change-detection tests before loading the model:
+
+```bash
+mkdir -p logs
+sbatch --test-only scripts/detect_bounding_boxes.slurm 5
+sbatch scripts/detect_bounding_boxes.slurm 5
+```
+
+Follow the job and inspect its final status:
+
+```bash
+squeue -u "$USER"
+tail -f "$(ls -t logs/bounding_boxes_*.out | head -n 1)"
+sacct -j JOB_ID --format=JobID,State,ExitCode,Elapsed,MaxRSS
+```
+
+The result is written without copying the generated images again:
+
+```text
+/datastore/khanhnd/models/aeroeyes_output/output/bounding_boxes/
+├── labels/          # YOLO labels for confirmed newly added rescue objects
+├── reports/         # per-pair delta, detection, matching, and decision data
+├── visualizations/  # orange delta boxes and green confirmed object boxes
+└── summary.json
+```
+
+An empty label file means that Grounding DINO found no newly added rescue object
+that also passed the delta-overlap check. Review `reports/<stem>.json` and the
+matching visualization before changing either detection threshold.
+
 ### Run code  
 Run the download once, then generation and evaluation as separate processes:
 
@@ -156,10 +190,9 @@ hour between job submissions, even when a preceding job has finished.
 
 Downloaded input images do not replace missing generated before/after pairs.
 Without the previous results, generate a small new set of pairs and verify the
-bounding-box stage before scaling to 500. The current evaluation entry point
-computes delta statistics and the quality gate; object matching/refinement is
-not yet connected to it. Grounding DINO's existing YOLO export does not apply
-`match_and_refine_objects` to its detections.
+bounding-box stage before scaling to 500. `main_bounding_boxes.py` performs the
+delta-aware object matching and refined YOLO export. `main_evaluation.py` remains
+the separate, heavier quality-metric pipeline.
 
 If the download job was interrupted, run `python main_label.py` to rebuild
 `/datastore/khanhnd/models/aeroeyes_output/image_summary.json` from the images already on disk without

@@ -95,8 +95,38 @@ class ChangeDetectionTests(unittest.TestCase):
         self.assertEqual(report.preserved_objects[0][0].label, "building")
         self.assertEqual(len(report.added_rescue_objects), 1)
         self.assertEqual(report.added_rescue_objects[0][0].label, "rescue boat")
+        self.assertEqual(len(report.refined_rescue_objects), 1)
+        self.assertEqual(report.refined_rescue_objects[0].label, "rescue boat")
+        self.assertEqual(report.refined_rescue_objects[0].class_id, 1)
+        self.assertEqual(report.refined_rescue_objects[0].box, report.refined_boxes[0])
         self.assertEqual(len(report.rejected_detections), 1)
         self.assertEqual(report.rejected_detections[0][0].label, "firefighter")
+
+    def test_object_matching_does_not_preserve_different_classes(self) -> None:
+        mask = np.full((100, 100), 255, dtype=np.uint8)
+        delta_res = detect_change_delta(
+            Image.new("RGB", (100, 100)),
+            Image.new("RGB", (100, 100)),
+        )
+        delta_res.delta_mask = mask
+        delta_res.delta_area_ratio = 0.10
+
+        shared_box = BoundingBox(
+            x_min=20,
+            y_min=20,
+            x_max=80,
+            y_max=80,
+            area=3600,
+            mean_delta=100.0,
+        )
+        before = DetectedObject(0, "firefighter", shared_box, 0.90)
+        after = DetectedObject(1, "rescue boat", shared_box, 0.85)
+
+        report = match_and_refine_objects([before], [after], delta_res)
+
+        self.assertEqual(report.preserved_objects, [])
+        self.assertEqual(report.confirmed_rescue_count, 1)
+        self.assertEqual(report.refined_rescue_objects[0].label, "rescue boat")
 
 
 if __name__ == "__main__":

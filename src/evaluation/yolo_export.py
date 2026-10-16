@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import shutil
 from dataclasses import dataclass, field
+from math import ceil, floor
 from pathlib import Path
 
 from src.core.config import (
@@ -21,7 +22,9 @@ from PIL import Image
 from tqdm import tqdm
 from transformers import AutoModelForZeroShotObjectDetection, AutoProcessor
 
-from src.evaluation.sdqm_embedding import list_images
+from src.evaluation.change_detection import BoundingBox
+from src.evaluation.image_files import list_images
+from src.evaluation.object_matching import DetectedObject
 
 
 def load_class_map(yaml_path: str | Path) -> dict[str, int]:
@@ -54,21 +57,56 @@ def _label_to_class_id(label: str, class_map: dict[str, int]) -> int | None:
     return None
 
 
-def _box_to_yolo_line(
-    class_id: int,
-    box: torch.Tensor,
-    image_width: int,
-    image_height: int,
-) -> str:
-    x_min, y_min, x_max, y_max = box.tolist()
-    center_x = ((x_min + x_max) / 2) / image_width
-    center_y = ((y_min + y_max) / 2) / image_height
-    width = (x_max - x_min) / image_width
-    height = (y_max - y_min) / image_height
-    return (
-        f"{class_id} {center_x:.6f} {center_y:.6f} "
-        f"{width:.6f} {height:.6f}\n"
-    )
+@dataclass(frozen=True)
+class DetectionConversionContext:
+    class_map: dict[str, int]
+    image_width: int
+    image_height: int
+    box_threshold: float
+
+
+def _processed_result_to_objects(
+    result: dict,
+    context: DetectionConversionContext,
+) -> list[DetectedObject]:
+    labels = result.get("text_labels", result.get("labels", []))
+    objects: list[DetectedObject] = []
+    for box, score, label in zip(
+        result.get("boxes", []),
+        result.get("scores", []),
+        labels,
+        strict=False,
+    ):
+        confidence = float(score)
+        if confidence < context.box_threshold:
+            continue
+
+        label_text = str(label)
+        class_id = _label_to_class_id(label_text, context.class_map)
+        if class_id is None:
+            continue
+
+        raw_x_min, raw_y_min, raw_x_max, raw_y_max = box.tolist()
+        x_min = max(0, min(context.image_width - 1, floor(raw_x_min)))
+        y_min = max(0, min(context.image_height - 1, floor(raw_y_min)))
+        x_max = max(x_min + 1, min(context.image_width, ceil(raw_x_max)))
+        y_max = max(y_min + 1, min(context.image_height, ceil(raw_y_max)))
+        objects.append(
+            DetectedObject(
+                class_id=class_id,
+                label=_normalize_label(label_text),
+                box=BoundingBox(
+                    x_min=x_min,
+                    y_min=y_min,
+                    x_max=x_max,
+                    y_max=y_max,
+                    area=(x_max - x_min) * (y_max - y_min),
+                    mean_delta=0.0,
+                ),
+                confidence=confidence,
+            )
+        )
+    return objects
 
 
 @dataclass
@@ -103,7 +141,7 @@ class RescueDetector:
         ).to(eval_device)
         self._model.eval()
 
-    def detect(self, image: Image.Image) -> list[str]:
+    def detect_objects(self, image: Image.Image) -> list[DetectedObject]:
         if self._model is None or self._processor is None:
             self.load()
 
@@ -137,25 +175,19 @@ class RescueDetector:
                 threshold=self.box_threshold,
                 target_sizes=target_sizes,
             )
-        results = processed[0]
+        return _processed_result_to_objects(
+            processed[0],
+            DetectionConversionContext(
+                class_map=self.class_map,
+                image_width=width,
+                image_height=height,
+                box_threshold=self.box_threshold,
+            ),
+        )
 
-        lines: list[str] = []
-        for box, score, label in zip(
-            results["boxes"],
-            results["scores"],
-            results["labels"],
-            strict=False,
-        ):
-            if float(score) < self.box_threshold:
-                continue
-
-            class_id = _label_to_class_id(str(label), self.class_map)
-            if class_id is None:
-                continue
-
-            lines.append(_box_to_yolo_line(class_id, box, width, height))
-
-        return lines
+    def detect(self, image: Image.Image) -> list[str]:
+        width, height = image.size
+        return [detected.to_yolo(width, height) for detected in self.detect_objects(image)]
 
 
 def _write_dataset_yaml(output_dir: Path, template_path: Path) -> Path:

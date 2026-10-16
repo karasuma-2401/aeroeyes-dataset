@@ -27,7 +27,11 @@ class ObjectMatchingReport:
     rejected_detections: list[tuple[DetectedObject, str]]
     preservation_score: float
     confirmed_rescue_count: int
-    refined_boxes: list[BoundingBox]
+    refined_rescue_objects: list[DetectedObject]
+
+    @property
+    def refined_boxes(self) -> list[BoundingBox]:
+        return [detected_object.box for detected_object in self.refined_rescue_objects]
 
     @property
     def is_consistent_rescue(self) -> bool:
@@ -51,6 +55,8 @@ def match_and_refine_objects(
         for j, after_obj in enumerate(after_objects):
             if j in matched_after_indices:
                 continue
+            if before_obj.class_id != after_obj.class_id:
+                continue
             iou_val = before_obj.box.iou(after_obj.box)
             if iou_val > best_iou:
                 best_iou = iou_val
@@ -69,7 +75,7 @@ def match_and_refine_objects(
 
     added_rescue: list[tuple[DetectedObject, float]] = []
     rejected: list[tuple[DetectedObject, str]] = []
-    refined_boxes: list[BoundingBox] = []
+    refined_rescue_objects: list[DetectedObject] = []
 
     mask_h, mask_w = delta_result.delta_mask.shape
 
@@ -102,18 +108,25 @@ def match_and_refine_objects(
                 refined_x_max = int(x_min + xs.max() + 1)
                 refined_y_min = int(y_min + ys.min())
                 refined_y_max = int(y_min + ys.max() + 1)
-                refined_boxes.append(
-                    BoundingBox(
-                        x_min=refined_x_min,
-                        y_min=refined_y_min,
-                        x_max=refined_x_max,
-                        y_max=refined_y_max,
-                        area=int(changed_pixels_inside),
-                        mean_delta=after_obj.box.mean_delta,
+                refined_box = BoundingBox(
+                    x_min=refined_x_min,
+                    y_min=refined_y_min,
+                    x_max=refined_x_max,
+                    y_max=refined_y_max,
+                    area=(refined_x_max - refined_x_min)
+                    * (refined_y_max - refined_y_min),
+                    mean_delta=after_obj.box.mean_delta,
+                )
+                refined_rescue_objects.append(
+                    DetectedObject(
+                        class_id=after_obj.class_id,
+                        label=after_obj.label,
+                        box=refined_box,
+                        confidence=after_obj.confidence,
                     )
                 )
             else:
-                refined_boxes.append(box)
+                refined_rescue_objects.append(after_obj)
         else:
             rejected.append(
                 (
@@ -128,5 +141,5 @@ def match_and_refine_objects(
         rejected_detections=rejected,
         preservation_score=preservation_score,
         confirmed_rescue_count=len(added_rescue),
-        refined_boxes=refined_boxes,
+        refined_rescue_objects=refined_rescue_objects,
     )
