@@ -230,6 +230,18 @@ SDQM reports. It evaluates all saved images, including resumed runs. Generation
 retains all images; quality rejection is now a report field, not a regeneration
 loop. The target counts generated images, not quality-approved images.
 
+Install the additional evaluation dependencies once through Slurm. This keeps
+the generation environment's CUDA-enabled PyTorch build and adds the SDQM,
+CMMD, and image-quality packages used by the evaluation job:
+
+```bash
+sbatch --test-only scripts/setup_evaluation.slurm
+sbatch scripts/setup_evaluation.slurm
+```
+
+Confirm that the setup log ends with `Evaluation environment is ready.` before
+submitting the evaluation job.
+
 ```bash 
 mkdir -p logs
 sbatch sbatch.slurm 

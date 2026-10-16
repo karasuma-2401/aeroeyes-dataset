@@ -31,6 +31,19 @@ class GenerationEnvironmentTests(unittest.TestCase):
         self.assertNotIn("#SBATCH --gres", script)
         self.assertIn("bash scripts/setup_generation_env.sh", script)
 
+    def test_evaluation_setup_job_installs_and_validates_evaluation_dependencies(self) -> None:
+        script = Path("scripts/setup_evaluation.slurm").read_text(encoding="utf-8")
+
+        self.assertIn("#SBATCH --account=uit", script)
+        self.assertIn("#SBATCH --partition=normal", script)
+        self.assertNotIn("#SBATCH --gres", script)
+        self.assertIn("ultralytics==8.4.118", script)
+        self.assertIn("scripts/setup_sdqm_vinfo.sh", script)
+        self.assertIn("cmmd-pytorch/requirements.txt", script)
+        self.assertIn("pyiqa==0.1.16", script)
+        self.assertIn("pip check", script)
+        self.assertIn("check_custom_ultralytics", script)
+
 
 class GenerationJobTests(unittest.TestCase):
     def test_generation_job_requests_the_school_gpu_partition(self) -> None:
