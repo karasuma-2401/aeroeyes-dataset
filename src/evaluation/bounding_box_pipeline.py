@@ -16,6 +16,9 @@ from src.evaluation.object_matching import (
 from src.evaluation.yolo_export import RescueDetector, load_class_map
 
 
+MIN_VISIBLE_DELTA_AREA_RATIO = 0.005
+
+
 @dataclass(frozen=True)
 class BoundingBoxRunConfig:
     metadata_dir: Path = Path(OUTPUT_DIR) / "_metadata"
@@ -109,7 +112,10 @@ def _draw_visualization(
 ) -> Image.Image:
     visualization = image.convert("RGB").copy()
     draw = ImageDraw.Draw(visualization)
+    image_area = image.width * image.height
     for box in delta_boxes:
+        if box.area / image_area < MIN_VISIBLE_DELTA_AREA_RATIO:
+            continue
         draw.rectangle(
             (box.x_min, box.y_min, box.x_max, box.y_max),
             outline=(255, 165, 0),

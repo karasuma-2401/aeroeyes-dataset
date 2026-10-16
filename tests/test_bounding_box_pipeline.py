@@ -7,8 +7,11 @@ from src.evaluation.bounding_box_pipeline import (
     load_generation_records,
     run_bounding_box_pipeline,
 )
+from src.evaluation.change_detection import BoundingBox
+from src.evaluation.object_matching import DetectedObject
 from src.evaluation.yolo_export import (
     DetectionConversionContext,
+    _class_aware_nms,
     _processed_result_to_objects,
 )
 
@@ -99,6 +102,7 @@ class GroundingDinoConversionTests(unittest.TestCase):
                 image_width=100,
                 image_height=100,
                 box_threshold=0.25,
+                class_thresholds={},
             ),
         )
 
@@ -114,6 +118,38 @@ class GroundingDinoConversionTests(unittest.TestCase):
             (objects[0].box.x_max, objects[0].box.y_max),
             (100, 92),
         )
+
+    def test_class_threshold_rejects_low_confidence_rescue_boat_only(self) -> None:
+        objects = _processed_result_to_objects(
+            {
+                "boxes": [BoxValue([0, 0, 20, 20]), BoxValue([30, 30, 50, 50])],
+                "scores": [0.31, 0.31],
+                "text_labels": ["rescue boat", "firefighter"],
+            },
+            DetectionConversionContext(
+                class_map={"rescue_boat": 1, "firefighter": 0},
+                image_width=100,
+                image_height=100,
+                box_threshold=0.25,
+                class_thresholds={"rescue_boat": 0.33},
+            ),
+        )
+
+        self.assertEqual([item.label for item in objects], ["firefighter"])
+
+    def test_class_aware_nms_keeps_highest_confidence_duplicate(self) -> None:
+        box = BoundingBox(10, 10, 50, 50, 1600, 0.0)
+        detections = [
+            DetectedObject(0, "firefighter", box, 0.40),
+            DetectedObject(0, "firefighter", box, 0.80),
+            DetectedObject(1, "rescue_boat", box, 0.60),
+        ]
+
+        kept = _class_aware_nms(detections, iou_threshold=0.50)
+
+        self.assertEqual(len(kept), 2)
+        self.assertEqual(kept[0].confidence, 0.80)
+        self.assertEqual(kept[1].class_id, 1)
 
 
 if __name__ == "__main__":

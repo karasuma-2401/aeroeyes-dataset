@@ -126,6 +126,7 @@ class ChangeDetectionTests(unittest.TestCase):
 
         self.assertEqual(report.preserved_objects, [])
         self.assertEqual(report.confirmed_rescue_count, 1)
+        self.assertTrue(report.is_consistent_rescue)
         self.assertEqual(report.refined_rescue_objects[0].label, "rescue boat")
 
 

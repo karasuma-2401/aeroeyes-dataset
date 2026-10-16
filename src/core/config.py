@@ -199,6 +199,10 @@ SDQM_GROUNDING_DINO_MODEL = os.getenv(
 )
 SDQM_BOX_THRESHOLD = float(os.getenv("SDQM_BOX_THRESHOLD", "0.25"))
 SDQM_TEXT_THRESHOLD = float(os.getenv("SDQM_TEXT_THRESHOLD", "0.25"))
+SDQM_RESCUE_BOAT_THRESHOLD = float(
+    os.getenv("SDQM_RESCUE_BOAT_THRESHOLD", "0.33")
+)
+SDQM_NMS_IOU_THRESHOLD = float(os.getenv("SDQM_NMS_IOU_THRESHOLD", "0.50"))
 SDQM_METRIC_TYPES = [
     "similarity",
     "fdg",

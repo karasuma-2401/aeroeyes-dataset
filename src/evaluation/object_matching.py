@@ -35,7 +35,7 @@ class ObjectMatchingReport:
 
     @property
     def is_consistent_rescue(self) -> bool:
-        return self.preservation_score >= 0.5 and self.confirmed_rescue_count > 0
+        return self.confirmed_rescue_count > 0
 
 
 def match_and_refine_objects(

@@ -11,6 +11,8 @@ from src.core.config import (
     SDQM_BOX_THRESHOLD,
     SDQM_GROUNDING_DINO_MODEL,
     SDQM_MODEL_TEXT,
+    SDQM_NMS_IOU_THRESHOLD,
+    SDQM_RESCUE_BOAT_THRESHOLD,
     SDQM_TEXT_THRESHOLD,
     SDQM_YOLO_DATA_YAML,
     ensure_model_storage,
@@ -25,6 +27,9 @@ from transformers import AutoModelForZeroShotObjectDetection, AutoProcessor
 from src.evaluation.change_detection import BoundingBox
 from src.evaluation.image_files import list_images
 from src.evaluation.object_matching import DetectedObject
+
+
+DEFAULT_CLASS_THRESHOLDS = {"rescue_boat": SDQM_RESCUE_BOAT_THRESHOLD}
 
 
 def load_class_map(yaml_path: str | Path) -> dict[str, int]:
@@ -63,6 +68,7 @@ class DetectionConversionContext:
     image_width: int
     image_height: int
     box_threshold: float
+    class_thresholds: dict[str, float]
 
 
 def _processed_result_to_objects(
@@ -77,13 +83,17 @@ def _processed_result_to_objects(
         labels,
         strict=False,
     ):
-        confidence = float(score)
-        if confidence < context.box_threshold:
-            continue
-
         label_text = str(label)
+        normalized_label = _normalize_label(label_text)
         class_id = _label_to_class_id(label_text, context.class_map)
         if class_id is None:
+            continue
+        confidence = float(score)
+        required_confidence = max(
+            context.box_threshold,
+            context.class_thresholds.get(normalized_label, context.box_threshold),
+        )
+        if confidence < required_confidence:
             continue
 
         raw_x_min, raw_y_min, raw_x_max, raw_y_max = box.tolist()
@@ -94,7 +104,7 @@ def _processed_result_to_objects(
         objects.append(
             DetectedObject(
                 class_id=class_id,
-                label=_normalize_label(label_text),
+                label=normalized_label,
                 box=BoundingBox(
                     x_min=x_min,
                     y_min=y_min,
@@ -109,6 +119,26 @@ def _processed_result_to_objects(
     return objects
 
 
+def _class_aware_nms(
+    detections: list[DetectedObject],
+    iou_threshold: float,
+) -> list[DetectedObject]:
+    kept: list[DetectedObject] = []
+    for candidate in sorted(
+        detections,
+        key=lambda detected: detected.confidence,
+        reverse=True,
+    ):
+        overlaps_existing = any(
+            candidate.class_id == existing.class_id
+            and candidate.box.iou(existing.box) >= iou_threshold
+            for existing in kept
+        )
+        if not overlaps_existing:
+            kept.append(candidate)
+    return kept
+
+
 @dataclass
 class RescueDetector:
     model_name: str = SDQM_GROUNDING_DINO_MODEL
@@ -116,6 +146,10 @@ class RescueDetector:
     box_threshold: float = SDQM_BOX_THRESHOLD
     text_threshold: float = SDQM_TEXT_THRESHOLD
     class_map: dict[str, int] = field(default_factory=dict)
+    class_thresholds: dict[str, float] = field(
+        default_factory=lambda: dict(DEFAULT_CLASS_THRESHOLDS)
+    )
+    nms_iou_threshold: float = SDQM_NMS_IOU_THRESHOLD
     device: str | None = None
     _processor: AutoProcessor | None = field(default=None, init=False, repr=False)
     _model: AutoModelForZeroShotObjectDetection | None = field(
@@ -175,15 +209,17 @@ class RescueDetector:
                 threshold=self.box_threshold,
                 target_sizes=target_sizes,
             )
-        return _processed_result_to_objects(
+        detections = _processed_result_to_objects(
             processed[0],
             DetectionConversionContext(
                 class_map=self.class_map,
                 image_width=width,
                 image_height=height,
                 box_threshold=self.box_threshold,
+                class_thresholds=self.class_thresholds,
             ),
         )
+        return _class_aware_nms(detections, self.nms_iou_threshold)
 
     def detect(self, image: Image.Image) -> list[str]:
         width, height = image.size

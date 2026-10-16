@@ -125,6 +125,13 @@ The result is written without copying the generated images again:
 An empty label file means that Grounding DINO found no newly added rescue object
 that also passed the delta-overlap check. Review `reports/<stem>.json` and the
 matching visualization before changing either detection threshold.
+The rescue-boat threshold defaults to `0.33` to suppress the observed rubble
+false positive while retaining the verified `0.34` boat detection. Class-aware
+NMS defaults to IoU `0.50`. Configure these with
+`SDQM_RESCUE_BOAT_THRESHOLD` and `SDQM_NMS_IOU_THRESHOLD` in `.env`.
+`preservation_score` remains diagnostic because the detector class map contains
+rescue objects rather than buildings and roads; it does not reject an otherwise
+valid delta-confirmed bounding-box result.
 
 ### Run code  
 Run the download once, then generation and evaluation as separate processes:
