@@ -59,6 +59,8 @@ class GenerationEnvironmentTests(unittest.TestCase):
         self.assertIn("-r requirements-sdqm-core.txt", requirements)
         self.assertIn("tensorflow", requirements)
         self.assertIn("autokeras", requirements)
+        self.assertIn("py-cpuinfo", core_requirements)
+        self.assertIn("seaborn", core_requirements)
         self.assertIn("requirements-sdqm-core.txt", script)
         self.assertIn("tensorflow==2.21.0", script)
         self.assertIn("--progress-bar off", script)

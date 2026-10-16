@@ -13,6 +13,8 @@ transformers
 opencv-python
 albumentations
 pycocotools
+py-cpuinfo
+seaborn
 tqdm
 scikit-learn
 scikit-image
