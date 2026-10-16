@@ -39,6 +39,14 @@ def save_image(image: Image.Image, path: Path) -> None:
     temporary.replace(path)
 
 
+def read_json_object(path: Path) -> dict | None:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
 def budget_exhausted(started: float) -> bool:
     return GENERATION_TIMEOUT_SECONDS > 0 and monotonic() - started >= GENERATION_TIMEOUT_SECONDS
 
@@ -81,10 +89,17 @@ def completed_sample(stem: str) -> dict | None:
     metadata_path = Path(OUTPUT_DIR) / "_metadata" / f"{stem}.json"
     if not metadata_path.is_file():
         return None
-    record = json.loads(metadata_path.read_text(encoding="utf-8"))
-    if all(Path(record[key]).is_file() for key in (
-        "output_path", "reference_path", "generated_reference_path",
-    )):
+    record = read_json_object(metadata_path)
+    if record is None:
+        return None
+    artifact_paths = [
+        record.get(key)
+        for key in ("output_path", "reference_path", "generated_reference_path")
+    ]
+    if all(
+        isinstance(artifact_path, str) and Path(artifact_path).is_file()
+        for artifact_path in artifact_paths
+    ):
         return record
     return None
 
@@ -119,11 +134,12 @@ def prepare_samples(data: dict, started: float) -> list[dict]:
                 prepared_path = prepared_dir / f"{stem}.json"
                 reference_path = prepared_dir / f"{stem}.png"
                 if prepared_path.is_file() and reference_path.is_file():
-                    record = json.loads(prepared_path.read_text(encoding="utf-8"))
-                    if record.get("image_size") == IMAGE_SIZE:
+                    record = read_json_object(prepared_path)
+                    if record is not None and record.get("image_size") == IMAGE_SIZE:
                         records.append(record)
                         errors = 0
                         continue
+                    print(f"Rebuilding invalid prepared cache: {prepared_path.name}", flush=True)
                 if MAX_ATTEMPTS > 0 and attempts >= MAX_ATTEMPTS:
                     print("Preparation stopped: MAX_ATTEMPTS reached.", flush=True)
                     break
