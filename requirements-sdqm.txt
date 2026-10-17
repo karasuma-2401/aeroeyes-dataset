@@ -8,24 +8,6 @@
 # Phase 3 V-Info (custom ultralytics, Linux VPS recommended):
 #   pip install -e third_party/SDQM/dataset_interpretability/v_info/ultralytics
 
-deap
-mauve-text
-openai-clip
-scipy
-numpy
-torch
-pandas
-Pillow
-torchvision
-matplotlib
-pyyaml
-transformers
-opencv-python
-autokeras
-fiftyone
-albumentations
-pycocotools
-tqdm
-scikit-learn
-scikit-image
+-r requirements-sdqm-core.txt
 tensorflow
+autokeras

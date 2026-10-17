@@ -1,15 +1,26 @@
-from dotenv import load_dotenv
-from pathlib import Path
 import os
-import torch
-import numpy as np
 import random
+from pathlib import Path
 
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+try:
+    import torch
+except ImportError:
+    torch = None
+
+try:
+    import numpy as np
+except ImportError:
+    np = None
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MODEL_STORAGE_DIR = Path(
-    "/datastore/cndt_khanhnd/models/aeroeyes_model"
+    "/datastore/khanhnd/models/aeroeyes_model"
 )
 MODEL_STORAGE_DIR = Path(
     os.getenv("AEROEYES_MODEL_DIR", str(DEFAULT_MODEL_STORAGE_DIR))
@@ -70,7 +81,7 @@ JSON_PATH = os.getenv(
     "JSON_PATH",
     str(PROJECT_ROOT / "data" / "input" / "eccv_train.json"),
 )
-OUTPUT_STORAGE_DIR = Path("/datastore/cndt_khanhnd/models/aeroeyes_output")
+OUTPUT_STORAGE_DIR = Path("/datastore/khanhnd/models/aeroeyes_output")
 OUTPUT_DIR = str(OUTPUT_STORAGE_DIR / "output")
 DOWNLOAD_IMAGES_DIR = OUTPUT_STORAGE_DIR / "download_images"
 IMAGE_SUMMARY_PATH = OUTPUT_STORAGE_DIR / "image_summary.json"
@@ -188,6 +199,10 @@ SDQM_GROUNDING_DINO_MODEL = os.getenv(
 )
 SDQM_BOX_THRESHOLD = float(os.getenv("SDQM_BOX_THRESHOLD", "0.25"))
 SDQM_TEXT_THRESHOLD = float(os.getenv("SDQM_TEXT_THRESHOLD", "0.25"))
+SDQM_RESCUE_BOAT_THRESHOLD = float(
+    os.getenv("SDQM_RESCUE_BOAT_THRESHOLD", "0.33")
+)
+SDQM_NMS_IOU_THRESHOLD = float(os.getenv("SDQM_NMS_IOU_THRESHOLD", "0.50"))
 SDQM_METRIC_TYPES = [
     "similarity",
     "fdg",
@@ -221,6 +236,44 @@ SDQM_RUN_REGRESSION = os.getenv("SDQM_RUN_REGRESSION", "true").lower() in (
 SDQM_MIN_REGRESSION_ROWS = int(os.getenv("SDQM_MIN_REGRESSION_ROWS", "3"))
 SDQM_MIN_IMAGES = 2
 SDQM_SUMMARY_PATH = str(Path(SDQM_OUTPUT_DIR) / "sdqm_summary.md")
+
+# ----------------------------------------------------------
+# Disaster Filtering Configuration
+# ----------------------------------------------------------
+VALID_DISASTER_CLASSES = (
+    "earthquake",
+    "flood",
+    "wildfire",
+    "landslide",
+    "mudslide",
+    "hurricane",
+    "tornado",
+    "volcanic_eruption",
+    "tsunami",
+    "avalanche",
+    "collapsed_building",
+    "structural_damage",
+)
+
+DISCARD_INCIDENT_CLASSES = (
+    "traffic_jam",
+    "blocked_road",
+    "car_accident",
+    "protest",
+    "construction",
+    "fog",
+)
+
+DISASTER_CLIP_THRESHOLD = float(os.getenv("DISASTER_CLIP_THRESHOLD", "0.55"))
+
+# ----------------------------------------------------------
+# Change Detection & Delta Bounding Box Configuration
+# ----------------------------------------------------------
+DELTA_INTENSITY_THRESHOLD = float(os.getenv("DELTA_INTENSITY_THRESHOLD", "25.0"))
+DELTA_MIN_AREA_RATIO = float(os.getenv("DELTA_MIN_AREA_RATIO", "0.01"))
+DELTA_MAX_AREA_RATIO = float(os.getenv("DELTA_MAX_AREA_RATIO", "0.60"))
+DELTA_MORPH_KERNEL_SIZE = int(os.getenv("DELTA_MORPH_KERNEL_SIZE", "7"))
+
 # ----------------------------------------------------------
 # HTTP Headers
 # ----------------------------------------------------------
@@ -240,8 +293,9 @@ HEADERS = {
 
 def random_seed(): 
     random.seed(BASE_SEED)
-    np.random.seed(BASE_SEED)
-    torch.manual_seed(BASE_SEED)
-
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(BASE_SEED)
+    if np is not None:
+        np.random.seed(BASE_SEED)
+    if torch is not None:
+        torch.manual_seed(BASE_SEED)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(BASE_SEED)

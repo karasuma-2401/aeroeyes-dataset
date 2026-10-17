@@ -16,7 +16,7 @@ from src.core.config import (
     SDQM_YOLO_DATA_YAML,
     ensure_model_storage,
 )
-from src.evaluation.sdqm_embedding import IMAGE_EXTENSIONS
+from src.evaluation.image_files import IMAGE_EXTENSIONS
 from src.evaluation.sdqm_vinfo import check_custom_ultralytics
 
 

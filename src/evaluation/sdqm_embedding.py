@@ -12,20 +12,7 @@ from PIL import Image
 from tqdm import tqdm
 from transformers import AutoImageProcessor, AutoModel
 
-IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".tiff", ".webp"}
-
-
-def list_images(image_dir: str | Path) -> list[Path]:
-    root = Path(image_dir)
-    if not root.is_dir():
-        raise NotADirectoryError(f"Image directory not found: {root}")
-
-    files = sorted(
-        path
-        for path in root.iterdir()
-        if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
-    )
-    return files
+from src.evaluation.image_files import list_images
 
 
 def embed_image_directory(
